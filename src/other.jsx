@@ -3,58 +3,66 @@ import { useEffect, useState } from "react";
 import * as topojson from "topojson-client";
 import topology from "./world-topo.json";
 import { geoEckert6 } from "d3-geo-projection";
+import { geoRotation } from "d3";
+
 const world = topojson.feature(topology, topology.objects.units);
 
-const fromLL = ([lon, lat]) => {
-  return [lon / 360, Math.sin((lat * Math.PI) / 180)];
+function dist([x1, y1], [x2, y2]) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function toRadians(degrees) {
+  return degrees * (Math.PI / 180);
+}
+
+function flatten(array) {
+  const arrayCopy = [...array];
+  return arrayCopy.reduce((acc, curr) => acc.concat(curr), []);
+}
+
+function sort(array) {
+  // Create a copy of the array using the spread operator
+  const arrayCopy = [...array];
+  return arrayCopy.sort((a, b) => a - b);
+}
+
+function haversineDistance([lat1, lon1], [lat2, lon2]) {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in kilometers
+}
+
+function arrayAvg(array) {
+  if (array.length === 0) {
+    return 0; // Avoid division by zero
+  }
+  const sum = array.reduce(
+    (accumulator, currentValue) => accumulator + currentValue,
+    0
+  );
+  return sum / array.length;
+}
+
+const useLambdaRotation = () => {
+  let [lambdaRotation, setLambdaRotation] = useState(0);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setLambdaRotation(lambdaRotation >= 360 ? 0 : lambdaRotation + 5);
+    }, 5);
+  });
+  return lambdaRotation;
 };
-
-const toLL = ([x, y]) => {
-  return [360 * x, (Math.acos(-2 * y) / Math.PI - 0.5) * 180];
-};
-
-let testSquare = [
-  [0, 0],
-  [0.5, 0.5],
-  [0.9, 0],
-  [0, 0.9],
-  [0.9, 0.9],
-];
-
-let testLLSquare = [
-  [0, 0],
-  [-180, -90],
-  [-180, 90],
-  [180, -90],
-  [180, 90],
-];
-
-let test = [
-  [0, 0],
-  [0.49, 0.49],
-  [0.51, 0.49],
-  [0.49, 0.51],
-  [0.51, 0.51],
-];
-
-let cities = [
-  [34.052235, -118.243683], // Los Angeles
-  [40.712776, -74.005974], // New York
-  [51.507351, -0.127758], // London
-];
-
-let paris = [48.856613, 2.352222];
-
-let zero = [0, 0];
-
-let positiveMod = (n, m) => {
-  return ((n % m) + m) % m;
-};
-
-let windowMod = (a, mod) => {
-  return positiveMod(a + mod, 2 * mod) - mod;
-};
-
 const fractionalPart = (number) => {
   return number - Math.floor(number);
 };
@@ -67,17 +75,6 @@ const relativeCoords = (event) => {
   return { x: x, y: y };
 };
 
-const useLambdaRotation = () => {
-  let [lambdaRotation, setLambdaRotation] = useState(0);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setLambdaRotation(lambdaRotation >= 360 ? 0 : lambdaRotation + 5);
-    }, 5);
-  });
-  return lambdaRotation;
-};
-
 const PHI = (1 + Math.sqrt(5)) / 2;
 
 const fibonacciLattice = (n) => {
@@ -87,25 +84,20 @@ const fibonacciLattice = (n) => {
   ]);
 };
 
-// const shiftPoints = ([xShift, yShift]) => {
-//   return ([x, y]) => [positiveMod(x + xShift, 1), positiveMod(y + yShift, 1)];
-// };
-
-// let mapLog = (x) => {
-//   console.log(x);
-//   return x;
-// };
-// .map(mapLog)
-
-const genPoints = (n, shiftLL) => {
-  let [shiftX, shiftY] = fromLL(shiftLL);
+const genPoints = (n, [lonShift, latShift]) => {
   return fibonacciLattice(n)
-    .map(([x, y]) => [windowMod(x + shiftX, 0.5), windowMod(y + shiftY, 0.5)])
-    .map(toLL);
+    .map(([x, y]) => {
+      return [360 * x - 180, (Math.acos(1 - 2 * y) / Math.PI) * 180 - 90];
+    })
+    .map((p) => {
+      let degrees = [lonShift + 180, latShift + 90];
+      let [lon, lat] = geoRotation(degrees).invert(p);
+      return [-1 * lon, lat];
+    });
 };
 
 const Main = () => {
-  let [userPos, setUserPos] = useState([0, 0]);
+  let [userPos, setUserPos] = useState([-180, -90]);
   // let lambdaRotation = useLambdaRotation();
 
   const width = 500;
@@ -137,7 +129,15 @@ const Main = () => {
         {(projection) => {
           if (userPos) {
             points = genPoints(7, userPos);
-            console.log(points);
+            console.log(
+              sort(
+                flatten(
+                  points.map((p) =>
+                    points.map((p2) => haversineDistance(p, p2))
+                  )
+                )
+              )
+            );
           }
 
           return (
@@ -177,8 +177,8 @@ const Main = () => {
                   <circle
                     key={i}
                     r={width / 200}
-                    fill={i === 0 ? "#ff0004" : "#ffbb00"}
-                    stroke={i === 0 ? "#980003" : "#d99f00"}
+                    fill={`oklch(0.9 0.3 ${(360 / points.length) * i})`}
+                    stroke={`oklch(0.5 0.3 ${(360 / points.length) * i})`}
                     cx={x}
                     cy={y}
                   />
