@@ -6,6 +6,8 @@ This is a pretty naive implementation and honestly doesn't result in great place
 
 We start with a fibonacci lattice to distribute points around the globe, rotate to the chosen point (by d3's geoRotation), and then search to the closest land mass.
 
+https://github.com/thomaswright/weekly-challenge-009-dragon-ball/assets/5634164/ae31a73b-60d9-44c4-98e9-3dc253e0554f
+
 ## Demo
 
 https://thomaswright.github.io/weekly-challenge-009-dragon-ball/
