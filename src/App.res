@@ -5,9 +5,13 @@ module Map = {
 
 @react.component
 let make = () => {
-  let (count, setCount) = React.useState(() => 0)
-
   <div>
     <Map />
+    <div className={"w-[500px] text-center text-3xl italic font-black text-[#ff8500]"}>
+      {"Dragon Ball Locations!"->React.string}
+    </div>
+    <div className={"w-[500px] text-center italic font-bold text-[#0049c9]"}>
+      {"Pick a spot on the globe to see where the Dragon Balls go."->React.string}
+    </div>
   </div>
 }
